@@ -152,9 +152,6 @@
       <label class="row"><input type="checkbox" x-model="settings.autoRotate">Auto-rotate</label>
       <label class="row"><input type="checkbox" x-model="settings.touchAdvance">Tap screen to advance</label>
       <div class="hint">Touch the display to jump to the next screen. Turn off to ignore touch.</div>
-      <h2 style="margin-top:1em">Display</h2>
-      <label class="row"><input type="checkbox" x-model="settings.invertDisplay">Invert colors (panel polarity)</label>
-      <div class="hint">If colors look wrong on your panel, toggle this. Takes effect immediately.</div>
     </article>
     <article>
       <h2>Timing</h2>
@@ -319,6 +316,8 @@
       <div class="hint">Fixed accent for all usage numbers and bars (preset or "Custom hex…" for a <code>#RRGGBB</code> value), or Auto for usage-based coloring. Takes effect immediately on Save.</div>
       <label class="row"><input type="checkbox" x-model="settings.usageShowConsumed">Show consumed % (instead of remaining)</label>
       <div class="hint">Off: numbers show how much quota is left. On: how much has been used (e.g. 20% used shows 20%).</div>
+      <label class="row"><input type="checkbox" x-model="settings.invertDisplay">Invert colors (if colors look wrong)</label>
+      <div class="hint">If your panel shows inverted / negative-looking colors, toggle this. Takes effect immediately.</div>
       <label>Timezone</label>
       <select x-model.number="settings.tzMinutes">
         <template x-for="tz in tzZones()" :key="tz.min">
