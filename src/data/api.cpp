@@ -114,8 +114,10 @@ static bool tlsGet(const String& url, const std::function<void(HTTPClient&)>& ad
 // After this many consecutive failures, escalate to on-screen error.
 static constexpr int kMaxSilentFails = 3;
 static int s_claudeFails = 0;
-static int s_connFails   = 0;   // consecutive connection-level (code<0) failures
-int Api::claudeConnFails() { return s_connFails; }
+static int  s_connFails    = 0;   // consecutive connection-level (code<0) failures
+static bool s_okSinceBoot  = false;
+int  Api::claudeConnFails()  { return s_connFails; }
+bool Api::claudeOkSinceBoot(){ return s_okSinceBoot; }
 // Record a fetch attempt's outcome for the connection-failure streak: a
 // connection-level error (negative code) grows it; reaching the server at all
 // (success or any HTTP status) clears it.
@@ -257,6 +259,8 @@ bool Api::fetchClaude(const Settings& s, ClaudeData& out) {
         slot++;
     }
 
-    out.valid = true;
+    out.valid    = true;
+    out.lastOkMs = millis();   // stamp freshness so the UI can age-out stale data
+    s_okSinceBoot = true;
     return true;
 }

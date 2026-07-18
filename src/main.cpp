@@ -320,7 +320,13 @@ void loop() {
         // Only a reboot recovers it. Reboot after a run of CONNECTION-level
         // failures — auth/HTTP-status errors reset the streak, so an expired
         // token never causes a reboot loop (it just shows the error to fix).
+        //
+        // claudeOkSinceBoot() is the loop guard: we only restart when Claude
+        // demonstrably worked this boot and then stopped — the signature of the
+        // fragmentation bug. During a WAN outage the fetch fails from the start,
+        // so after one restart the flag stays false and we never restart again.
         if (WiFi.status() == WL_CONNECTED && !g_settings.claudeKey.isEmpty()
+            && Api::claudeOkSinceBoot()
             && Api::claudeConnFails() >= 5) {
             Serial.printf("[claude] %d consecutive connection failures — rebooting to recover\n",
                           Api::claudeConnFails());

@@ -21,30 +21,26 @@ static char   s_heroReset[12] = "";
 static char   s_secSub[24]    = "";
 static float  s_modelPct[3]       = {-2.f, -2.f, -2.f};
 static char   s_modelLabel[3][12] = {"", "", ""};
-static bool   s_showingErr        = false;   // was the last paint the FULL error screen?
-static bool   s_wasStale          = false;   // showing data, but last fetch failed (offline hint)
-
 // We have something worth showing if a previous fetch succeeded.
 static inline bool haveUsableData(const ClaudeData& d) {
     return d.valid && (d.sessionPct >= 0 || d.weeklyPct >= 0);
 }
-// Full error screen only when there's NO data at all (e.g. bad key from the
-// start). If we have stale-but-valid data we keep showing it (like Clawd) and
-// just flag staleness — a dropped connection shouldn't blank the dashboard.
-static inline bool isErrorScreen(const ClaudeData& d) {
-    return d.err[0] && !haveUsableData(d);
+// How long we keep showing stale values before escalating to the error screen:
+// a few refresh cycles, but never less than 10 minutes.
+static inline uint32_t staleLimitMs(const Settings& s) {
+    uint32_t lim = (uint32_t)s.refreshMin * 60000UL * 3UL;
+    return lim < 600000UL ? 600000UL : lim;
 }
-
-// Small muted footer: "offline — last values" while stale, cleared when fresh.
-static void paintStaleFooter(bool stale) {
-    tft.fillRect(0, 224, SCREEN_W, 16, Theme::BG);
-    if (stale) {
-        Display::useFont("DMMono-11");
-        tft.setTextDatum(MC_DATUM);
-        tft.setTextColor(Theme::MUTED, Theme::BG);
-        tft.drawString("offline \xC2\xB7 showing last values", SCREEN_W/2, 230);
-    }
-    s_wasStale = stale;
+static inline bool dataTooOld(const ClaudeData& d, const Settings& s) {
+    if (!d.lastOkMs) return true;                        // never succeeded
+    return (uint32_t)(millis() - d.lastOkMs) > staleLimitMs(s);
+}
+// A dropped connection shouldn't blank the dashboard, so briefly-stale data is
+// still shown (like Clawd). But once it ages out — or we never had data at all —
+// escalate to the error screen, otherwise an expired token would hide behind
+// plausible-looking frozen numbers forever.
+static inline bool isErrorScreen(const ClaudeData& d, const Settings& s) {
+    return d.err[0] && (!haveUsableData(d) || dataTooOld(d, s));
 }
 
 bool chClaudeEnabled(const ChannelCtx& ctx) {
@@ -53,14 +49,19 @@ bool chClaudeEnabled(const ChannelCtx& ctx) {
 
 // ── Region paint helpers (also called from draw()) ──
 
-static void paintSessReset(time_t resetEpoch) {
-    String s = (resetEpoch > 0) ? Api::formatCountdown(resetEpoch) : String("--");
+// Doubles as the staleness indicator: while offline the countdown would decay to
+// a bogus "now", so we show OFFLINE instead. Keeping it here (rather than a new
+// footer) stays inside the Layout safe area and out of the rotation strip.
+static void paintSessReset(time_t resetEpoch, bool stale) {
+    String s = stale ? String("OFFLINE")
+                     : ((resetEpoch > 0) ? Api::formatCountdown(resetEpoch) : String("--"));
     tft.fillRect(SCREEN_W - 185, 24, 185, 26, Theme::BG);   // wide clear for the broader Jersey glyphs
     Display::useFont("VT323-32");
     tft.setTextDatum(TR_DATUM);
-    tft.setTextColor(Theme::CORAL, Theme::BG);
+    tft.setTextColor(stale ? Theme::MUTED : Theme::CORAL, Theme::BG);
     tft.drawString(s, SCREEN_W - 18, 26);                    // right margin so nothing clips
     strncpy(s_heroReset, s.c_str(), sizeof(s_heroReset) - 1);
+    s_heroReset[sizeof(s_heroReset) - 1] = '\0';
 }
 
 static void paintSessHero(float pct) {
@@ -159,7 +160,7 @@ void chClaudeDraw(const ChannelCtx& ctx) {
     }
     Display::statusBar("Claude", modelTag, Theme::CORAL);
 
-    if (isErrorScreen(d)) {            // no data at all → show the error prominently
+    if (isErrorScreen(d, *ctx.settings)) {   // no data, or it aged out → show the error
         Display::useFont("Silkscreen-16");
         tft.setTextDatum(MC_DATUM);
         tft.setTextColor(Theme::CORAL, Theme::BG);
@@ -169,11 +170,10 @@ void chClaudeDraw(const ChannelCtx& ctx) {
         tft.drawString("Refresh token in web UI", SCREEN_W/2, 124);
         s_heroPct = -2.f; s_secPct = -2.f;
         s_heroReset[0] = 0; s_secSub[0] = 0;
-        s_showingErr = true;
         return;
     }
-    s_showingErr = false;
 
+    const bool stale   = d.err[0] != '\0';   // showing last good values
     const bool swapped = ctx.settings->claudeWeeklyHero;
     const float heroPct  = swapped ? d.weeklyPct   : d.sessionPct;
     const float secPct   = swapped ? d.sessionPct  : d.weeklyPct;
@@ -185,7 +185,7 @@ void chClaudeDraw(const ChannelCtx& ctx) {
     tft.setTextColor(Theme::MUTED, Theme::BG);
     tft.drawString(swapped ? "WEEKLY" : "5-HOUR WINDOW", 12, 32);
 
-    paintSessReset(heroRst);
+    paintSessReset(heroRst, stale);
     paintSessHero(heroPct);
     Display::dotsDivider(12, 146, SCREEN_W - 24);
 
@@ -196,28 +196,29 @@ void chClaudeDraw(const ChannelCtx& ctx) {
 
     s_heroPct = (heroPct < 0) ? -2.f : heroPct;
     s_secPct  = (secPct  < 0) ? -2.f : secPct;
-    paintStaleFooter(d.err[0] != '\0');   // hint if we're showing stale values
 }
 
 void chClaudeTick(const ChannelCtx& ctx) {
-    if (!ctx.claude) return;
+    if (!ctx.claude || !ctx.settings) return;
     const ClaudeData& d = *ctx.claude;
-    // Full-error-screen <-> data is a whole different layout; tick's region
-    // repaints can't switch between them. If that flips, do a full redraw.
-    bool es = isErrorScreen(d);
-    if (es != s_showingErr) { chClaudeDraw(ctx); return; }
-    if (es) return;
-    // Data mode: keep the "offline" footer in sync when staleness toggles.
-    if ((d.err[0] != '\0') != s_wasStale) paintStaleFooter(d.err[0] != '\0');
+    // The error screen is a different layout, but tick must never clear the
+    // screen (see channel.h). It doesn't need to: err/data only change on a
+    // fetch, and refreshAll() already calls drawActive() after every fetch —
+    // so the layout switch happens through the normal full-draw path.
+    if (isErrorScreen(d, *ctx.settings)) return;
 
+    const bool stale   = d.err[0] != '\0';
     const bool swapped = ctx.settings->claudeWeeklyHero;
     const float heroPct  = swapped ? d.weeklyPct   : d.sessionPct;
     const float secPct   = swapped ? d.sessionPct  : d.weeklyPct;
     const time_t heroRst = swapped ? d.weeklyReset : d.sessionReset;
     const time_t secRst  = swapped ? d.sessionReset: d.weeklyReset;
 
-    String fresh = (heroRst > 0) ? Api::formatCountdown(heroRst) : String("--");
-    if (strcmp(fresh.c_str(), s_heroReset) != 0) paintSessReset(heroRst);
+    // While stale this renders OFFLINE, so the string compare also picks up the
+    // fresh <-> stale transition and repaints without any extra state.
+    String fresh = stale ? String("OFFLINE")
+                         : ((heroRst > 0) ? Api::formatCountdown(heroRst) : String("--"));
+    if (strcmp(fresh.c_str(), s_heroReset) != 0) paintSessReset(heroRst, stale);
 
     float p = (heroPct < 0) ? -2.f : heroPct;
     if (fabsf(p - s_heroPct) > 0.4f) {
