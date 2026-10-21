@@ -129,7 +129,7 @@ can re-enter them, or back up first via **Device → Config backup**.)
 [PlatformIO](https://platformio.org/) required.
 
 ```bash
-git clone https://github.com/monsierfux/clawd-meter.git
+git clone https://github.com/monsieurfux/clawd-meter.git
 cd clawd-meter
 pio run -e cyd -t buildfs   # filesystem (fonts + web UI)
 pio run -e cyd              # firmware
