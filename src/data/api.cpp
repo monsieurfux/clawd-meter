@@ -152,8 +152,23 @@ static bool fetchClaudeOrg(const String& key, String& orgId, char errBuf[]) {
     body = String();
     JsonArray arr = doc.as<JsonArray>();
     if (arr.size() == 0) { snprintf(errBuf, 24, "No org"); return false; }
-    const char* uuid = arr[0]["uuid"].as<const char*>();
+    // An account can belong to several orgs (free chat org, API orgs, the
+    // Pro/Max subscription org). Only the subscription org — capability
+    // "raven" — reports five_hour/seven_day; the others return all-null, so
+    // picking arr[0] blindly can yield a silent "no usage" dashboard.
+    JsonObject chosen = arr[0];
+    for (JsonObject o : arr) {
+        bool isSub = false;
+        for (JsonVariant c : o["capabilities"].as<JsonArray>()) {
+            const char* cap = c.as<const char*>();
+            if (cap && strcmp(cap, "raven") == 0) { isSub = true; break; }
+        }
+        if (isSub) { chosen = o; break; }
+    }
+    const char* uuid = chosen["uuid"].as<const char*>();
     if (!uuid || !*uuid) { snprintf(errBuf, 24, "No uuid"); return false; }
+    Serial.printf("[claude] %u org(s), using %.8s... (%s)\n", (unsigned)arr.size(), uuid,
+                  chosen["rate_limit_tier"] | "?");
     orgId = uuid;
     s_cachedOrgId = orgId;
     s_cachedOrgKey = key;
