@@ -387,7 +387,10 @@ x-text="mcpSnippet()"></pre>
       <h2>Firmware</h2>
       <div class="info-row"><span class="k">Version</span><span class="v" x-text="state.fw || '—'"></span></div>
       <div class="hint" style="margin-top: 16px;">
-        OTA firmware upload: <a href="/update" style="color: var(--sky);">/update</a>
+        Updates are flashed over USB (no over-the-air update on this board): download the latest
+        <code>clawd-meter-full-esp32-cyd.bin</code> from
+        <a href="https://github.com/monsieurfux/clawd-meter/releases/latest" target="_blank" rel="noopener" style="color: var(--sky);">GitHub releases</a>
+        and flash it at offset <code>0x0</code>, see the README. Back up your config below first — flashing resets settings.
       </div>
     </article>
     <article>
