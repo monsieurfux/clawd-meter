@@ -235,8 +235,20 @@ bool Api::fetchClaude(const Settings& s, ClaudeData& out) {
         return (s && *s) ? parseISO8601(s) : 0;
     };
 
-    out.sessionPct   = pctFromKey("five_hour");
-    out.weeklyPct    = pctFromKey("seven_day");
+    float sessionPct = pctFromKey("five_hour");
+    float weeklyPct  = pctFromKey("seven_day");
+    // claude.ai answers 200 with every window null for orgs that carry no
+    // subscription. Treat that as a failure (keep stale data, surface an
+    // error once it ages out) — otherwise -1 everywhere would pass as a
+    // healthy fetch and the dashboard could stay blank with no hint.
+    if (sessionPct < 0 && weeklyPct < 0) {
+        Serial.println("[claude] usage payload has no five_hour/seven_day — wrong org or no subscription?");
+        snprintf(out.err, sizeof(out.err), "No usage");
+        return false;
+    }
+
+    out.sessionPct   = sessionPct;
+    out.weeklyPct    = weeklyPct;
     out.sessionReset = resetFromKey("five_hour");
     out.weeklyReset  = resetFromKey("seven_day");
 

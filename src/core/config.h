@@ -26,7 +26,7 @@ static constexpr uint16_t BL_OFF  = 1023;
 // AP-mode setup network
 static constexpr const char* SETUP_AP_SSID = "glimmer-setup";
 
-// mDNS name (for ArduinoOTA + nice URL)
+// mDNS name (nice URL)
 static constexpr const char* MDNS_HOSTNAME = "glimmer";
 
 // Defaults

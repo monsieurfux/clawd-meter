@@ -20,13 +20,12 @@ namespace Display {
     void drawSetupMode(const char* ap, const char* ip);
     void drawConnecting(const char* ssid, int attempt);
     void drawError(const char* title, const char* msg);
-    void drawOtaProgress(uint8_t pct);             // shown during OTA flash
 
     // 16×16 glimmer spark logo — direct-blit, no FS dependency.
     void drawLogo(int x, int y, uint16_t color);
 
     // Re-arm partial-redraw state for boot/system screens so the next
-    // drawSplash/drawConnecting/drawOtaProgress paints chrome from scratch.
+    // drawSplash/drawConnecting paints chrome from scratch.
     // Call this whenever a channel takes over the screen or a different
     // system screen activates.
     void resetSystemScreens();

@@ -10,7 +10,6 @@
 //   POST /api/factory-reset
 //   POST /push         — ad-hoc card (existing)
 //   POST /mcp          — JSON-RPC subset (existing)
-//   POST /update       — OTA firmware + filesystem (ESP8266HTTPUpdateServer)
 
 #include "web.h"
 #include "display.h"
@@ -19,18 +18,7 @@
 #include "compat.h"
 #include <LittleFS.h>
 
-#if defined(ESP32)
-  #include <HTTPUpdateServer.h>
-#else
-  #include <ESP8266HTTPUpdateServer.h>
-#endif
-
 static WebServerClass          server(80);
-#if defined(ESP32)
-static HTTPUpdateServer        updater;
-#else
-static ESP8266HTTPUpdateServer updater;
-#endif
 static Settings*               pSettings = nullptr;
 
 // Defined in src/channels/ch_push.cpp
@@ -460,14 +448,6 @@ static void handleMcp() {
 
 void Web::begin(Settings& settings) {
     pSettings = &settings;
-    updater.setup(&server);                                     // POST /update OTA
-    // OTA progress UI — Update callback fires repeatedly during flash write.
-    // We only repaint when integer-% changes (≤100 paints per flash, cheap).
-    Update.onProgress([](size_t cur, size_t total) {
-        if (!total) return;
-        uint8_t pct = (uint8_t)((cur * 100UL) / total);
-        Display::drawOtaProgress(pct);
-    });
 
     // JSON API
     server.on("/api/state",          HTTP_GET,  handleApiState);

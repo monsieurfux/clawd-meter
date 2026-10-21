@@ -194,7 +194,7 @@ uint16_t Display::usageColor(float pct) {
 
 // ── Boot/splash scenes (partial-redraw — chrome painted once per session) ───
 
-// Session-level state shared across system screens (splash / connecting / OTA).
+// Session-level state shared across system screens (splash / connecting).
 // resetSystemScreens() clears all of them so the next system screen paints
 // from scratch.
 static bool s_splashChrome     = false;
@@ -202,8 +202,6 @@ static char s_splashLine[40]   = "";
 static char s_connectSsid[40]  = "";
 static int  s_connectAttemptMin = -1;
 static int  s_connectLitDot    = -1;
-static int  s_otaChrome        = false;
-static int  s_otaLastPct       = -1;
 
 void Display::resetSystemScreens() {
     s_splashChrome      = false;
@@ -211,8 +209,6 @@ void Display::resetSystemScreens() {
     s_connectSsid[0]    = 0;
     s_connectAttemptMin = -1;
     s_connectLitDot     = -1;
-    s_otaChrome         = false;
-    s_otaLastPct        = -1;
 }
 
 void Display::drawSplash(const char* line) {
@@ -343,45 +339,6 @@ void Display::drawError(const char* title, const char* msg) {
     Display::useFont("DMMono-11");
     tft.setTextColor(Theme::MUTED, Theme::BG);
     tft.drawString(msg, SCREEN_W/2, 135);
-}
-
-void Display::drawOtaProgress(uint8_t pct) {
-    if (!s_otaChrome) {
-        clear();
-        drawLogo(SCREEN_W/2 - 8, 30, Theme::AMBER);
-        useFont("Silkscreen-16");
-        tft.setTextDatum(MC_DATUM);
-        tft.setTextColor(Theme::INK, Theme::BG);
-        tft.drawString("GLIMMER", SCREEN_W/2, 58);
-        useFont("Silkscreen-12");
-        tft.setTextColor(Theme::CORAL, Theme::BG);
-        tft.drawString("UPDATING", SCREEN_W/2, 82);
-
-        useFont("DMMono-11");
-        tft.setTextColor(Theme::MUTED, Theme::BG);
-        tft.drawString("do not unplug", SCREEN_W/2, 178);
-        tft.drawString("v" FW_VERSION, SCREEN_W/2, 200);
-
-        s_otaChrome = true;
-        s_otaLastPct = -1;
-    }
-    if ((int)pct == s_otaLastPct) return;
-
-    char buf[6]; snprintf(buf, sizeof(buf), "%u%%", (unsigned)pct);
-    tft.fillRect(SCREEN_W/2 - 32, 100, 64, 32, Theme::BG);
-    useFont("VT323-44");
-    tft.setTextDatum(MC_DATUM);
-    tft.setTextColor(Theme::CORAL, Theme::BG);
-    tft.drawString(buf, SCREEN_W/2, 110);
-
-    int barX = 12, barY = 148, barW = SCREEN_W - 24, barH = 12;
-    tft.drawRect(barX, barY, barW, barH, Theme::LINE);
-    int fillW = ((barW - 2) * pct) / 100;
-    tft.fillRect(barX + 1, barY + 1, fillW, barH - 2, Theme::CORAL);
-    if (fillW < barW - 2)
-        tft.fillRect(barX + 1 + fillW, barY + 1, (barW - 2) - fillW, barH - 2, Theme::PANEL);
-
-    s_otaLastPct = pct;
 }
 
 // ── Design-system primitives (v0.8) ─────────────────────────────────────────
