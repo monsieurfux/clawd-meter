@@ -10,6 +10,6 @@
 #include "storage.h"
 
 namespace Web {
-    void begin(Settings& settings);   // sets up routes + OTA on the given mutable settings ref
+    void begin(Settings& settings);   // sets up routes on the given mutable settings ref
     void loop();                       // call from main loop
 }

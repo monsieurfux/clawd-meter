@@ -1,7 +1,7 @@
 // SmallTV — main orchestrator.
 //
 // Architecture:
-//   core/    hardware + I/O (display, wifi, time, storage, web, OTA)
+//   core/    hardware + I/O (display, wifi, time, storage, web)
 //   data/    external API clients (claude, codex, ...)
 //   channels/ self-contained renderers, registered in kChannels[]
 //
@@ -112,7 +112,7 @@ static void drawActive() {
         Display::drawError("No channels", "Configure web UI");
         return;
     }
-    // Re-arm splash/connecting/OTA partial-redraw state in case we re-enter
+    // Re-arm splash/connecting partial-redraw state in case we re-enter
     // a system screen later (e.g., WiFi reconnect drops to drawConnecting).
     Display::resetSystemScreens();
     // Quiet cut: the channel's draw() clears + paints in ~80 ms.
