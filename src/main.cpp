@@ -74,6 +74,7 @@ static int         g_activePtr   = 0;     // which active channel is on screen
 static uint32_t    g_lastRefresh = 0;
 static uint32_t    g_lastSlide   = 0;
 static uint32_t    g_lastTick    = 0;
+static uint32_t    g_previewUntil = 0;    // live colour preview: auto-rotate paused until then (0 = off)
 
 // ── Accessors for web.cpp / ch_info.cpp ─────────────────────────────────────
 
@@ -118,6 +119,24 @@ static void drawActive() {
     // Quiet cut: the channel's draw() clears + paints in ~80 ms.
     ChannelCtx ctx = makeCtx();
     kChannels[g_activeIdx[g_activePtr]].draw(ctx);
+}
+
+// Live colour preview from the web UI: jump to the Clawd channel and pause
+// auto-rotate so the colour can be judged on the real panel. The colours were
+// already written into g_settings (RAM only) by the web handler; chClawdTick()
+// repaints when it sees them change. If the hold expires without a Save, the
+// persisted colours are restored (see loop()).
+bool mainPreviewClawd(uint32_t holdMs) {
+    recomputeActive();
+    int idx = -1;
+    for (int i = 0; i < g_activeCount; i++) {
+        if (strcmp(kChannels[g_activeIdx[i]].name, "Clawd") == 0) { idx = i; break; }
+    }
+    if (idx < 0) return false;
+    if (g_activePtr != idx) { g_activePtr = idx; drawActive(); }
+    g_lastSlide    = millis();
+    g_previewUntil = millis() + holdMs;
+    return true;
 }
 
 // 2-px progress strip at y=230. Fills in current channel's theme color as
@@ -390,8 +409,14 @@ void loop() {
     // Channel auto-rotate — instant cut (no transition animation). Premium
     // devices do this; the single fillScreen+redraw in drawActive() is the
     // only flash, and it lasts <30 ms.
+    if (g_previewUntil && (int32_t)(now - g_previewUntil) >= 0) {
+        g_previewUntil = 0;
+        Settings saved = Storage::load();               // preview not saved → revert colours
+        g_settings.clawdEyeColor = saved.clawdEyeColor;
+        g_settings.clawdBgColor  = saved.clawdBgColor;
+    }
     uint32_t slideMs = (uint32_t)g_settings.channelSec * 1000UL;
-    if (!g_apMode && g_settings.autoRotate && g_activeCount > 1
+    if (!g_apMode && g_settings.autoRotate && g_activeCount > 1 && !g_previewUntil
         && now - g_lastSlide >= slideMs) {
         g_lastSlide = now;
         // Pick up any settings toggles before deciding what's next.
