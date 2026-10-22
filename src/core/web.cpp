@@ -31,6 +31,7 @@ extern const char* mainActiveChannelName();
 extern int         mainEnabledCount();
 extern int         mainTotalCount();
 extern void        mainTriggerRefresh();
+extern bool        mainPreviewClawd(uint32_t holdMs);
 extern const char* mainEnabledChannelName(int idx);
 extern const ClaudeData* mainClaudeData();
 
@@ -244,6 +245,24 @@ static void applyIfPresent(Settings& s, JsonDocument& d) {
     applyFloat("weatherLon", s.weatherLon);
 }
 
+// Live colour preview: RAM only (no flash write), then show Clawd and hold the
+// rotation. Save persists as usual; without a Save the colours revert.
+static void handleApiPreview() {
+    if (!pSettings) { server.send(500, "application/json", "{\"error\":\"no settings\"}"); return; }
+    JsonDocument d;
+    if (deserializeJson(d, server.arg("plain"))) {
+        server.send(400, "application/json", "{\"error\":\"bad json\"}");
+        return;
+    }
+    if (d["clawdEyeColor"].is<const char*>()) pSettings->clawdEyeColor = d["clawdEyeColor"].as<const char*>();
+    if (d["clawdBgColor"].is<const char*>())  pSettings->clawdBgColor  = d["clawdBgColor"].as<const char*>();
+    if (!mainPreviewClawd(30000UL)) {
+        server.send(409, "application/json", "{\"error\":\"Clawd channel disabled\"}");
+        return;
+    }
+    server.send(200, "application/json", "{\"ok\":true}");
+}
+
 static void handleApiPostSettings() {
     if (!pSettings) { server.send(500, "application/json", "{\"error\":\"no settings\"}"); return; }
     JsonDocument d;
@@ -453,6 +472,7 @@ void Web::begin(Settings& settings) {
     server.on("/api/state",          HTTP_GET,  handleApiState);
     server.on("/api/settings",       HTTP_GET,  handleApiGetSettings);
     server.on("/api/settings",       HTTP_POST, handleApiPostSettings);
+    server.on("/api/preview",        HTTP_POST, handleApiPreview);
     server.on("/api/export",         HTTP_GET,  handleApiExport);
     server.on("/api/import",         HTTP_POST, handleApiImport);
     server.on("/api/factory-reset",  HTTP_POST, handleFactoryReset);

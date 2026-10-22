@@ -247,10 +247,17 @@
         <option value="lilac">Lilac</option>
         <option value="custom">Custom hex…</option>
       </select>
-      <input type="text" maxlength="9" placeholder="#ffffff"
-             x-show="!hexPresetsEye.includes(settings.clawdEyeColor)"
-             x-model="settings.clawdEyeColor"
-             x-on:blur="settings.clawdEyeColor = normHex(settings.clawdEyeColor)">
+      <div class="color-row">
+        <input type="color" aria-label="Pick eye color"
+               x-bind:value="cssColor(settings.clawdEyeColor, '#000000')"
+               x-on:input="settings.clawdEyeColor = $event.target.value"
+               x-on:input.debounce.150ms="previewColors()">
+        <input type="text" maxlength="9" placeholder="#ffffff"
+               x-show="!hexPresetsEye.includes(settings.clawdEyeColor)"
+               x-model="settings.clawdEyeColor"
+               x-on:input.debounce.400ms="previewColors()"
+               x-on:blur="settings.clawdEyeColor = normHex(settings.clawdEyeColor)">
+      </div>
       <label>Background</label>
       <select x-bind:value="colMode(settings.clawdBgColor, hexPresetsBg)"
               x-on:change="pickColor('clawdBgColor', $event.target.value, hexPresetsBg)">
@@ -263,11 +270,19 @@
         <option value="lilac">Lilac</option>
         <option value="custom">Custom hex…</option>
       </select>
-      <input type="text" maxlength="9" placeholder="#ffffff"
-             x-show="!hexPresetsBg.includes(settings.clawdBgColor)"
-             x-model="settings.clawdBgColor"
-             x-on:blur="settings.clawdBgColor = normHex(settings.clawdBgColor)">
-      <div class="hint">Choose a preset, or "Custom hex…" to type a <code>#RRGGBB</code> value. Changes apply when the Clawd channel is next shown (within one rotation), or immediately after Save &amp; Restart.</div>
+      <div class="color-row">
+        <input type="color" aria-label="Pick background color"
+               x-bind:value="cssColor(settings.clawdBgColor, '#d97757')"
+               x-on:input="settings.clawdBgColor = $event.target.value"
+               x-on:input.debounce.150ms="previewColors()">
+        <input type="text" maxlength="9" placeholder="#ffffff"
+               x-show="!hexPresetsBg.includes(settings.clawdBgColor)"
+               x-model="settings.clawdBgColor"
+               x-on:input.debounce.400ms="previewColors()"
+               x-on:blur="settings.clawdBgColor = normHex(settings.clawdBgColor)">
+      </div>
+      <div class="hint">Pick a preset, use the color picker, or type a <code>#RRGGBB</code> value. The device switches to Clawd and shows the color live while you pick (rotation pauses for ~30 s); <b>Save</b> keeps it, otherwise it reverts.</div>
+      <div class="hint">Tip for the CYD panel: dark, saturated colors look much richer than bright ones, which wash out. A deep orange is e.g. <code>#891000</code> at 100% brightness — lowering brightness makes it paler, not deeper.</div>
     </article>
     </div>
     <div class="actions">
@@ -426,6 +441,7 @@ function app() {
     pushHex: false,   // true → custom #hex input is active (else preset swatch)
     // preset lists per colour dropdown (anything not in the list = a custom #hex)
     hexPresetsHighlight: ['auto','orange','coral','amber','mint','sky','lilac'],
+    pal: {orange:'#d97757',coral:'#ff5247',amber:'#ffd23f',mint:'#8fe574',sky:'#54b6ff',lilac:'#c385ff',black:'#000000'},
     hexPresetsEye:       ['orange','black','coral','amber','mint','sky','lilac'],
     hexPresetsBg:        ['black','orange','coral','amber','mint','sky','lilac'],
     toast: { msg: '', error: false, _t: null },
@@ -449,7 +465,28 @@ function app() {
         if (presets.includes(this.settings[key]) || !this.settings[key]) this.settings[key] = '#';
       } else {
         this.settings[key] = sel;
+        this.previewColors();
       }
+    },
+    // Preset name or "#RRGGBB" → a CSS colour the native picker accepts.
+    cssColor(v, fb) {
+      if (!v) return fb;
+      if (/^#[0-9a-fA-F]{6}$/.test(v)) return v.toLowerCase();
+      return this.pal[v] || fb;
+    },
+    // Show the current colours on the device (RAM only — Save persists).
+    async previewColors() {
+      try {
+        const r = await fetch('/api/preview', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({clawdEyeColor: this.settings.clawdEyeColor, clawdBgColor: this.settings.clawdBgColor})
+        });
+        if (r.status === 409 && !this.previewWarned) {
+          this.previewWarned = true;
+          this.showToast('Enable the Clawd channel to preview colors on the device', true);
+        }
+      } catch (e) { /* device unreachable — the canvas preview above still works */ }
     },
     // Auto-prepend "#" when a bare 6-char hex value is entered.
     normHex(v) {
@@ -460,8 +497,7 @@ function app() {
     initClawdPreview(cv) {
       const ctx = cv.getContext('2d'), W = cv.width, H = cv.height, S = W / 320;
       const self = this;
-      const PAL = {orange:'#d97757',coral:'#ff5247',amber:'#ffd23f',mint:'#8fe574',sky:'#54b6ff',lilac:'#c385ff',black:'#000000'};
-      const css = (v, fb) => !v ? fb : (v[0] === '#' ? v : (PAL[v] || fb));
+      const css = (v, fb) => self.cssColor(v, fb);
       const cxL = 80*S, cxR = 240*S, cy = 94*S, ew = 78*S, eh = 84*S, v = (84/3)*S, look = 14*S;
       const seg = (x0,y0,x1,y1,w) => { ctx.lineWidth=w; ctx.beginPath(); ctx.moveTo(x0,y0); ctx.lineTo(x1,y1); ctx.stroke(); };
       const dot = (x,y) => { ctx.beginPath(); ctx.arc(x,y,7*S,0,7); ctx.fill(); };

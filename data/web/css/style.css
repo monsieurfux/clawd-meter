@@ -403,3 +403,8 @@ input:disabled {
   outline-offset: 1px;
   color: var(--ink);
 }
+
+/* Colour picker next to the hex field (Clawd → Colors) */
+.color-row { display: flex; gap: 8px; align-items: center; }
+.color-row input[type="color"] { flex: none; width: 48px; height: 38px; padding: 2px; cursor: pointer; }
+.color-row input[type="text"] { flex: 1; margin: 0; }
